@@ -1,0 +1,202 @@
+---
+- name: Create fstab record for the first swap file
+  mount:
+    name: none
+    src: /tmp/swap1
+    opts: sw
+    fstype: swap
+    state: present
+  register: swap1_created
+
+- name: Try to create fstab record for the first swap file again
+  mount:
+    name: none
+    src: /tmp/swap1
+    opts: sw
+    fstype: swap
+    state: present
+  register: swap1_created_again
+
+- name: Check that we created the swap1 record
+  assert:
+    that:
+    - swap1_created['changed']
+    - not swap1_created_again['changed']
+
+- name: Create fstab record for the second swap file
+  mount:
+    name: none
+    src: /tmp/swap2
+    opts: sw
+    fstype: swap
+    state: present
+  register: swap2_created
+
+- name: Try to create fstab record for the second swap file again
+  mount:
+    name: none
+    src: /tmp/swap1
+    opts: sw
+    fstype: swap
+    state: present
+  register: swap2_created_again
+
+- name: Check that we created the swap2 record
+  assert:
+    that:
+    - swap2_created['changed']
+    - not swap2_created_again['changed']
+
+- name: Remove the fstab record for the first swap file
+  mount:
+    name: none
+    src: /tmp/swap1
+    state: absent
+  register: swap1_removed
+
+- name: Try to remove the fstab record for the first swap file again
+  mount:
+    name: none
+    src: /tmp/swap1
+    state: absent
+  register: swap1_removed_again
+
+- name: Check that we removed the swap1 record
+  assert:
+    that:
+    - swap1_removed['changed']
+    - not swap1_removed_again['changed']
+
+- name: Remove the fstab record for the second swap file
+  mount:
+    name: none
+    src: /tmp/swap2
+    state: absent
+  register: swap2_removed
+
+- name: Try to remove the fstab record for the second swap file again
+  mount:
+    name: none
+    src: /tmp/swap2
+    state: absent
+  register: swap2_removed_again
+
+- name: Check that we removed the swap2 record
+  assert:
+    that:
+    - swap2_removed['changed']
+    - not swap2_removed_again['changed']
+
+
+- name: Try to activate swap spaces
+  block:
+    - name: create a file to be used for memory swapping
+      command:
+        cmd: dd if=/dev/zero of=/tmp/swap1 bs=1M count=64
+        creates: /tmp/swap1
+
+    - name: create a swap filesystem into the dedicated file
+      community.general.filesystem:
+        dev: /tmp/swap1
+        fstype: swap
+
+    - name: setup permissions suitable for swap usage
+      file:
+        path: /tmp/swap1
+        mode: u=rw,go=
+        state: file
+
+    - name: Get swap info (0)
+      command: swapon --noheadings --show=name,prio
+      register: swap_info_0
+      changed_when: false
+
+    - name: Enable swap file with priority 1234
+      mount:
+        path: none
+        src: /tmp/swap1
+        fstype: swap
+        opts: pri=1234
+        state: mounted
+      register: do_swap_1
+
+    - name: Get swap info (1)
+      command: swapon --noheadings --show=name,prio
+      register: swap_info_1
+      changed_when: false
+
+    - name: Update swap priority to 10
+      mount:
+        path: none
+        src: /tmp/swap1
+        fstype: swap
+        opts: pri=10
+        state: mounted
+      register: do_swap_2
+
+    - name: Get swap info (2)
+      command: swapon --noheadings --show=name,prio
+      register: swap_info_2
+      changed_when: false
+
+    - name: Do it again (test idempotency)
+      mount:
+        path: none
+        src: /tmp/swap1
+        fstype: swap
+        opts: pri=10
+        state: mounted
+      register: do_swap_3
+
+    - name: Get swap info (3)
+      command: swapon --noheadings --show=name,prio
+      register: swap_info_3
+      changed_when: false
+
+
+  always:
+    - name: Disable swap file totally
+      mount:
+        path: none
+        src: /tmp/swap1
+        fstype: swap
+        state: absent
+      register: do_swap_4
+
+    - name: Remove swap file
+      file:
+        path: /tmp/swap1
+        state: absent
+
+    - name: Get swap info (4)
+      command: swapon --noheadings --show=name,prio
+      register: swap_info_4
+      changed_when: false
+
+
+- name: format results
+  set_fact:
+    list_prio: "{{ list_prio | d([]) + [swap_prio] }}"
+  loop:
+    - "{{ swap_info_0 }}"
+    - "{{ swap_info_1 }}"
+    - "{{ swap_info_2 }}"
+    - "{{ swap_info_3 }}"
+    - "{{ swap_info_4 }}"
+  vars:
+    swap_line: "{{ item.stdout_lines | select('match', '/tmp/swap1') | list | join }}"
+    swap_prio: "{{ swap_line.split()[1] if swap_line | length > 0 else '' }}"
+
+- name: check that results are as expected
+  assert:
+    that:
+      - do_swap_1 is changed
+      - do_swap_2 is changed
+      - do_swap_3 is not changed
+      - do_swap_4 is changed
+
+      - list_prio[0] | length == 0
+      - list_prio[1] | int == 1234
+      - list_prio[2] | int == 10
+      - list_prio[3] | int == 10
+      - list_prio[4] | length == 0
