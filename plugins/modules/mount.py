@@ -203,13 +203,15 @@ EXAMPLES = r'''
 
 import errno
 import os
-import re
 import platform
 
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ansible.posix.plugins.module_utils.mount import ismount
 from ansible.module_utils.six import iteritems
 from ansible.module_utils._text import to_bytes, to_native
+
+
+SYSTEM = platform.system().lower()
 
 
 def write_fstab(module, lines, path):
@@ -259,7 +261,7 @@ def _set_mount_save_old(module, args):
     escaped_args = dict([(k, _escape_fstab(v)) for k, v in iteritems(args)])
     new_line = '%(src)s %(name)s %(fstype)s %(opts)s %(dump)s %(passno)s\n'
 
-    if platform.system() == 'SunOS':
+    if SYSTEM == 'sunos':
         new_line = (
             '%(src)s - %(name)s %(fstype)s %(passno)s %(boot)s %(opts)s\n')
 
@@ -281,16 +283,16 @@ def _set_mount_save_old(module, args):
         # Check if we got a valid line for splitting
         # (on Linux the 5th and the 6th field is optional)
         if (
-                platform.system() == 'SunOS' and len(fields) != 7 or
-                platform.system() == 'Linux' and len(fields) not in [4, 5, 6] or
-                platform.system() not in ['SunOS', 'Linux'] and len(fields) != 6):
+                SYSTEM == 'sunos' and len(fields) != 7 or
+                SYSTEM == 'linux' and len(fields) not in [4, 5, 6] or
+                SYSTEM not in ['sunos', 'linux'] and len(fields) != 6):
             to_write.append(line)
 
             continue
 
         ld = {}
 
-        if platform.system() == 'SunOS':
+        if SYSTEM == 'sunos':
             (
                 ld['src'],
                 dash,
@@ -328,7 +330,7 @@ def _set_mount_save_old(module, args):
         exists = True
         args_to_check = ('src', 'fstype', 'opts', 'dump', 'passno')
 
-        if platform.system() == 'SunOS':
+        if SYSTEM == 'sunos':
             args_to_check = ('src', 'fstype', 'passno', 'boot', 'opts')
 
         for t in args_to_check:
@@ -371,15 +373,15 @@ def unset_mount(module, args):
 
         # Check if we got a valid line for splitting
         if (
-                platform.system() == 'SunOS' and len(line.split()) != 7 or
-                platform.system() != 'SunOS' and len(line.split()) != 6):
+                SYSTEM == 'sunos' and len(line.split()) != 7 or
+                SYSTEM != 'sunos' and len(line.split()) != 6):
             to_write.append(line)
 
             continue
 
         ld = {}
 
-        if platform.system() == 'SunOS':
+        if SYSTEM == 'sunos':
             (
                 ld['src'],
                 dash,
@@ -425,8 +427,8 @@ def _set_fstab_args(fstab_file):
     if (
             fstab_file and
             fstab_file != '/etc/fstab' and
-            platform.system().lower() != 'sunos'):
-        if platform.system().lower().endswith('bsd'):
+            SYSTEM != 'sunos'):
+        if SYSTEM.endswith('bsd'):
             result.append('-F')
         else:
             result.append('-T')
@@ -443,7 +445,7 @@ def mount(module, args):
     name = args['name']
     cmd = [mount_bin]
 
-    if platform.system().lower() == 'openbsd':
+    if SYSTEM == 'openbsd':
         # Use module.params['fstab'] here as args['fstab'] has been set to the
         # default value.
         if module.params['fstab'] is not None:
@@ -484,7 +486,7 @@ def remount(module, args):
     cmd = [mount_bin]
 
     # Multiplatform remount opts
-    if platform.system().lower().endswith('bsd'):
+    if SYSTEM.endswith('bsd'):
         if module.params['state'] == 'remounted' and args['opts'] != 'defaults':
             cmd += ['-u', '-o', args['opts']]
         else:
@@ -495,7 +497,7 @@ def remount(module, args):
         else:
             cmd += ['-o', 'remount']
 
-    if platform.system().lower() == 'openbsd':
+    if SYSTEM == 'openbsd':
         # Use module.params['fstab'] here as args['fstab'] has been set to the
         # default value.
         if module.params['fstab'] is not None:
@@ -510,7 +512,7 @@ def remount(module, args):
     out = err = ''
 
     try:
-        if platform.system().lower().endswith('bsd'):
+        if SYSTEM.endswith('bsd'):
             # Note: Forcing BSDs to do umount/mount due to BSD remount not
             # working as expected (suspect bug in the BSD mount command)
             # Interested contributor could rework this to use mount options on
@@ -564,7 +566,7 @@ def is_bind_mounted(module, linux_mounts, dest, src=None, fstype=None):
 
     is_mounted = False
 
-    if platform.system() == 'Linux' and linux_mounts is not None:
+    if SYSTEM == 'linux' and linux_mounts is not None:
         if src is None:
             # That's for unmounted/absent
             if dest in linux_mounts:
@@ -576,7 +578,7 @@ def is_bind_mounted(module, linux_mounts, dest, src=None, fstype=None):
     else:
         bin_path = module.get_bin_path('mount', required=True)
         cmd = '%s -l' % bin_path
-        _, out, _ = module.run_command(cmd)
+        rc, out, err = module.run_command(cmd)
         mounts = []
 
         if len(out) > 0:
@@ -675,36 +677,60 @@ def is_swap(module, args):
     if module.params['fstype'] != 'swap' or args['name'] != 'none':
         return False
 
-    swapon_bin = module.get_bin_path('swapon', required=True)
-    cmd = [swapon_bin, '--noheadings', '--show=name']
-    dev = os.path.realpath(args['src'])
+    if SYSTEM == 'sunos':
+        swap_bin = module.get_bin_path('swap', required=True)
+        cmd = [swap_bin, '-l']
+    elif SYSTEM.endswith('bsd'):
+        swapctl_bin = module.get_bin_path('swapctl', required=True)
+        cmd = [swapctl_bin, '-l']
+    else:
+        # swapon is supposed to be the standard command
+        swapon_bin = module.get_bin_path('swapon', required=True)
+        cmd = [swapon_bin]
+
+    if SYSTEM == 'linux':
+        cmd += ['--noheadings', '--show=name']
 
     rc, out, err = module.run_command(cmd)
 
     if rc != 0:
         module.fail_json(msg="Error while querying active swaps: %s" % err)
 
-    return bool(dev in out.splitlines())
+    if SYSTEM == 'linux':
+        devices = out.splitlines()
+    else:
+        devices = [x.split()[0] for x in out.splitlines()]
+
+    dev = os.path.realpath(args['src'])
+    return bool(dev in devices)
 
 
 def swapon(module, args):
     """Activate a swap device/file with the proper options."""
 
-    swapon_bin = module.get_bin_path('swapon', required=True)
-    cmd = [swapon_bin]
+    if SYSTEM == 'sunos':
+        swap_bin = module.get_bin_path('swap', required=True)
+        cmd = [swap_bin, '-a']
+    elif SYSTEM.endswith('bsd'):
+        swapctl_bin = module.get_bin_path('swapctl', required=True)
+        cmd = [swapctl_bin, '-a']
+    else:
+        # swapon is supposed to be the standard command, isn't it ?
+        swapon_bin = module.get_bin_path('swapon', required=True)
+        cmd = [swapon_bin]
 
     # Only 'swapon -a' applies options from fstab, otherwise they are ignored
     # unless provided on command line with '-o opts'. But not all versions of
     # swapon accept -o or --options. So we don't use it here, but at least we
-    # keep the 'priority' and 'discard' options.
-    if args['opts'] is not None:
+    # keep the 'priority' and 'discard' flags available on Linux.
+    if SYSTEM == 'linux' and args['opts'] is not None:
         for opt in args['opts'].split(','):
-            if re.match('pri=[0-9]', opt):
+            if opt.startswith('pri='):
                 cmd += ['-p', opt.split('=')[1]]
-            if re.match('discard=', opt):
-                cmd += ['-d', opt.split('=')[1]]
+            elif opt.startswith('discard'):
+                cmd += ['--%s' % opt]
 
-    # src such as UUID=some_uuid and LABEL=some_label work as is.
+    # src such as UUID=some_uuid and LABEL=some_label work as is (Linux).
     cmd += [args['src']]
 
     rc, out, err = module.run_command(cmd)
@@ -717,8 +743,18 @@ def swapon(module, args):
 def swapoff(module, args):
     """Deactivate a swap device/file."""
 
-    swapoff_bin = module.get_bin_path('swapoff', required=True)
-    cmd = [swapoff_bin, args['src']]
+    if SYSTEM == 'sunos':
+        swap_bin = module.get_bin_path('swap', required=True)
+        cmd = [swap_bin, '-d']
+    elif SYSTEM.endswith('bsd'):
+        swapctl_bin = module.get_bin_path('swapctl', required=True)
+        cmd = [swapctl_bin, '-d']
+    else:
+        # swapoff is supposed to be the standard command, isn't it ?
+        swapoff_bin = module.get_bin_path('swapoff', required=True)
+        cmd = [swapoff_bin]
+
+    cmd += [args['src']]
 
     rc, out, err = module.run_command(cmd)
 
@@ -770,7 +806,7 @@ def main():
     #   name, src, fstype, opts, dump, passno, state, fstab=/etc/fstab
     # Note: Do not modify module.params['fstab'] as we need to know if the user
     # explicitly specified it in mount() and remount()
-    if platform.system().lower() == 'sunos':
+    if SYSTEM == 'sunos':
         args = dict(
             name=module.params['path'],
             opts='-',
@@ -792,14 +828,14 @@ def main():
             args['fstab'] = '/etc/fstab'
 
         # FreeBSD doesn't have any 'default' so set 'rw' instead
-        if platform.system() == 'FreeBSD':
+        if SYSTEM == 'freebsd':
             args['opts'] = 'rw'
 
     linux_mounts = []
 
     # Cache all mounts here in order we have consistent results if we need to
     # call is_bind_mounted() multiple times
-    if platform.system() == 'Linux':
+    if SYSTEM == 'linux':
         linux_mounts = get_linux_mounts(module)
 
         if linux_mounts is None:
