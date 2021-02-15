@@ -2,6 +2,11 @@
 # Tasks to validate swapfile management (enabling/disabling its use) on FreeBSD.
 # The swapfile MUST be associated to a memory disk, that becomes the 'src'.
 
+- name: Swap off all (cleanup previous erraneous tests)
+  command:
+    cmd: swapoff -a
+
+
 - name: Try to activate swapfile
   vars:
     swapfile: /var/swapfile0
