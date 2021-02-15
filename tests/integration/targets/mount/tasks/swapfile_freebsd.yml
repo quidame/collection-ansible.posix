@@ -119,8 +119,8 @@
     - name: Assert that swap file is disabled and nothing changed
       assert:
         that:
-          - do_swap_3 is changed
-          - swap_info_3.stdout == swap_info_0.stdout
+          - swap_disabled_2 is not changed
+          - swap_info_4.stdout == swap_info_3.stdout
 
 
     - name: Detach memory disk
