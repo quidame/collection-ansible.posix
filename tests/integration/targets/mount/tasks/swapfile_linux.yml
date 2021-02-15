@@ -2,7 +2,7 @@
 # Tasks to validate swapfile management (enabling/disabling its use) on Linux.
 # The swapfile COULD be associated to a loop device, that would become the 'src'.
 
-- name: Swap off all (cleanup previous erraneous tests)
+- name: Swap off all (try to cleanup previous erraneous tests)
   command:
     cmd: swapoff -a
 
@@ -28,12 +28,13 @@
         dev: "{{ swapfile }}"
         fstype: swap
 
+
     - name: Get swap info (0)
       command: swapon --noheadings --show=name,prio
       register: swap_info_0
       changed_when: false
 
-    - name: Assert that swapfile is not already set
+    - name: Assert that swap file {{ swapfile }} is not used by swap
       assert:
         that:
           - swap_info_0.stdout | length == 0
@@ -146,3 +147,8 @@
       file:
         path: "{{ swapfile }}"
         state: absent
+
+
+- name: Swap on all (try to restore pre-test state)
+  command:
+    cmd: swapoff -a
