@@ -57,7 +57,7 @@
       assert:
         that:
           - swap_enabled_1 is changed
-          - swap_info_2.stdout_lines[0].split()[1] | int == 1234
+          - swap_info_1.stdout_lines[0].split()[1] | int == 1234
 
 
     - name: Update swap priority to 10
@@ -130,7 +130,7 @@
         state: absent
       register: swap_disabled_2
 
-    - name: Get swap info (4)
+    - name: Get swap info (5)
       command: swapon --noheadings --show=name,prio
       register: swap_info_5
       changed_when: false
