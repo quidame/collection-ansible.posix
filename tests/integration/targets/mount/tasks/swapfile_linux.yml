@@ -36,9 +36,7 @@
     - name: Assert that swapfile is not already set
       assert:
         that:
-          - swap_relevant_line | length == 0
-      vars:
-        swap_relevant_line: swap_info_0.stdout_lines | select('match', swapfile) | list | join
+          - swap_info_0.stdout | length == 0
 
 
     - name: Enable swap file with priority 1234
