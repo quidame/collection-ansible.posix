@@ -19,7 +19,9 @@
   register: optional_fields_update
 
 - name: Get the content of the fstab file
-  shell: cat /etc/fstab
+  command:
+    cmd: cat /etc/fstab
+  changed_when: false
   register: optional_fields_content
 
 - name: Check if the line containing the missing last two fields was changed

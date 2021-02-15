@@ -3,7 +3,8 @@
 # Linux only.
 
 - name: Create empty file
-  command: dd if=/dev/zero of=/tmp/myfs.img bs=1048576 count=20
+  command:
+    cmd: "dd if=/dev/zero of=/tmp/myfs.img bs=1048576 count=20"
 
 - name: Format FS
   community.general.filesystem:
@@ -20,6 +21,7 @@
 - name: Get the mount counter value
   shell:
     cmd: "dumpe2fs /tmp/myfs.img 2>/dev/null | grep -i '^mount count:'"
+  changed_when: false
   register: mount_count1
 
 - name: Get the current mount as exposed in /proc/mounts
@@ -35,7 +37,9 @@
     state: remounted
 
 - name: Get again the mount counter value
-  shell: "dumpe2fs /tmp/myfs.img 2>/dev/null | grep -i '^mount count:'"
+  shell:
+    cmd: "dumpe2fs /tmp/myfs.img 2>/dev/null | grep -i '^mount count:'"
+  changed_when: false
   register: mount_count2
 
 - name: Get again the current mount as exposed in /proc/mounts

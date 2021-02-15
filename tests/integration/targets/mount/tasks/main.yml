@@ -23,7 +23,7 @@
     - ansible_system in ['Linux', 'FreeBSD']
 
 
-- name: Include tasks to validate enabling/disabling of a swapfile (Linux, FreeBSD)
+- name: Include tasks to validate enabling/disabling a swapfile (Linux, FreeBSD)
   include_tasks: "swapfile_{{ ansible_system | lower }}.yml"
   when:
     - ansible_system in ['Linux', 'FreeBSD']
