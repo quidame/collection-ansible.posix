@@ -57,10 +57,7 @@
       assert:
         that:
           - swap_enabled_1 is changed
-          - swap_relevant_line | length > 0
-          - swap_relevant_line.split()[1] | int == 1234
-      vars:
-        swap_relevant_line: swap_info_1.stdout_lines | select('match', swapfile) | list | join
+          - swap_info_2.stdout_lines[0].split()[1] | int == 1234
 
 
     - name: Update swap priority to 10
@@ -81,10 +78,7 @@
       assert:
         that:
           - swap_enabled_2 is changed
-          - swap_relevant_line | length > 0
-          - swap_relevant_line.split()[1] | int == 10
-      vars:
-        swap_relevant_line: swap_info_2.stdout_lines | select('match', swapfile) | list | join
+          - swap_info_2.stdout_lines[0].split()[1] | int == 10
 
 
     - name: Update swap priority to 10, again
@@ -105,11 +99,7 @@
       assert:
         that:
           - swap_enabled_3 is not changed
-          - swap_relevant_line | length > 0
-          - swap_relevant_line.split()[1] | int == 10
           - swap_info_3.stdout_lines == swap_info_2.stdout_lines
-      vars:
-        swap_relevant_line: swap_info_3.stdout_lines | select('match', swapfile) | list | join
 
   always:
     - name: Disable swap file
@@ -129,10 +119,8 @@
       assert:
         that:
           - swap_disabled_1 is changed
-          - swap_relevant_line | length == 0
           - swap_info_4.stdout_lines == swap_info_0.stdout_lines
-      vars:
-        swap_relevant_line: swap_info_4.stdout_lines | select('match', swapfile) | list | join
+
 
     - name: Disable swap file, again
       mount:
@@ -151,10 +139,8 @@
       assert:
         that:
           - swap_disabled_2 is not changed
-          - swap_relevant_line | length == 0
           - swap_info_5.stdout_lines == swap_info_0.stdout_lines
-      vars:
-        swap_relevant_line: swap_info_5.stdout_lines | select('match', swapfile) | list | join
+
 
     - name: Remove swap file
       file:
